@@ -1,0 +1,32 @@
+image: google/cloud-sdk:slim
+
+stages:
+  - build
+  - deploy
+
+variables:
+  PROJECT_ID: "dal-vacation-home"
+  REGION: "us-east1"
+  SERVICE_NAME: "vacation-home"
+  REPOSITORY: "vacation-home"
+  GRUN_SERVICE_NAME: "dal-vacation-home-service"
+
+before_script:
+  - echo $GOOGLE_CLOUD_KEYFILE_JSON | base64 --decode > ${HOME}/gcloud-service-key.json
+  - gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json
+  - gcloud config set project $PROJECT_ID
+  - gcloud auth configure-docker us-east1-docker.pkg.dev
+
+build:
+  stage: build
+  script:
+    - cd client
+    - docker build -t us-east1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$CI_COMMIT_SHA .
+    - docker push us-east1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$CI_COMMIT_SHA
+
+deploy:
+  stage: deploy
+  script:
+    - gcloud run deploy $GRUN_SERVICE_NAME --image us-east1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$SERVICE_NAME:$CI_COMMIT_SHA --platform managed --region $REGION --allow-unauthenticated
+  only:
+    - main
